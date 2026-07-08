@@ -515,7 +515,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade50,
+                              color: theme.colorScheme.tertiaryContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -524,12 +524,12 @@ class _StatsScreenState extends State<StatsScreen> {
                                 Text('Ganancia del negocio',
                                     style: TextStyle(
                                         fontSize: 16, fontWeight: FontWeight.bold,
-                                        color: Colors.green.shade800)),
+                                        color: theme.colorScheme.onTertiaryContainer)),
                                 Text('\$${_fmt(totalGross - totalNet)}',
                                     style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.green.shade800)),
+                                        color: theme.colorScheme.onTertiaryContainer)),
                               ],
                             ),
                           ),

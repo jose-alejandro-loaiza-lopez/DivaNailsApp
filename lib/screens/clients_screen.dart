@@ -7,6 +7,7 @@ import '../models/client.dart';
 import '../models/appointment.dart';
 import '../services/app_data.dart';
 import '../services/time_config.dart';
+import '../utils/error_handler.dart';
 
 const double _cliDeleteW = 48;
 
@@ -36,15 +37,12 @@ class _ClientsScreenState extends State<ClientsScreen> {
   List<Client> _clients = [];
   Map<int, int> _appointmentCounts = {};
   bool _loading = true;
-  final _rowControllers = <_ClientRowControllers?>[];
+  final _rowControllers = <_ClientRowControllers>[];
   final _newCtrl = _ClientRowControllers();
   String _search = '';
   double _phoneW = 120;
   double _birthW = 100;
   double _locW = 150;
-  final ScrollController _scrollCtrl = ScrollController();
-  static const double _itemExtent = 48.0;
-  static const int _windowBuffer = 16;
 
   List<Client> get _filteredClients {
     if (_search.isEmpty) return _clients;
@@ -56,73 +54,28 @@ class _ClientsScreenState extends State<ClientsScreen> {
     ).toList();
   }
 
-  _ClientRowControllers _ensureController(int index) {
-    if (_rowControllers[index] == null) {
-      _rowControllers[index] = _ClientRowControllers();
-      _populateController(index);
-    }
-    return _rowControllers[index]!;
-  }
-
-  void _populateController(int index) {
-    final rc = _rowControllers[index]!;
-    final c = _clients[index];
-    final phoneStr = c.phone;
-    if (rc.phone.text != phoneStr) rc.phone.text = phoneStr;
-    if (rc.name.text != c.name) rc.name.text = c.name;
-    if (rc.lastName.text != c.lastName) rc.lastName.text = c.lastName;
-    rc.birthDay = c.birthDay;
-    rc.birthMonth = c.birthMonth;
-    if (rc.location.text != c.location) rc.location.text = c.location;
-  }
-
-  void _onScroll() {
-    if (!_scrollCtrl.hasClients || _clients.isEmpty || _search.isNotEmpty) return;
-    final offset = _scrollCtrl.position.pixels;
-    final viewportH = _scrollCtrl.position.viewportDimension;
-    final firstVisible = (offset / _itemExtent).floor();
-    final visibleCount = (viewportH / _itemExtent).ceil() + 1;
-    final keepStart = max(0, firstVisible - _windowBuffer);
-    final keepEnd = min(_clients.length, firstVisible + visibleCount + _windowBuffer);
-
-    for (int i = 0; i < _rowControllers.length; i++) {
-      final rc = _rowControllers[i];
-      if (rc != null && (i < keepStart || i >= keepEnd)) {
-        rc.dispose();
-        _rowControllers[i] = null;
-      }
-    }
-    for (int i = keepStart; i < keepEnd; i++) {
-      if (_rowControllers[i] == null) {
-        _rowControllers[i] = _ClientRowControllers();
-        _populateController(i);
-      }
-    }
-  }
-
   void _recalcWidths() {
     const pad = 28.0;
     const hStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
     const dStyle = TextStyle(fontSize: 14);
     _phoneW = _tw('Teléfono', hStyle) + pad;
-    final visible = _rowControllers.where((rc) => rc != null).cast<_ClientRowControllers>().toList();
-    for (final rc in [_newCtrl, ...visible]) {
+    for (final rc in [_newCtrl, ..._rowControllers]) {
       _phoneW = max(_phoneW, _tw(rc.phone.text.isEmpty ? '300 000 0000' : rc.phone.text, dStyle) + pad);
     }
     _birthW = _tw('Cumpleaños', hStyle) + pad;
-    for (final rc in [_newCtrl, ...visible]) {
+    for (final rc in [_newCtrl, ..._rowControllers]) {
       final t = rc.birthDay != null && rc.birthMonth != null
           ? '${rc.birthDay} ${_months[(rc.birthMonth! - 1).clamp(0, 11)]}'
           : 'DD/MM';
       _birthW = max(_birthW, _tw(t, dStyle) + pad);
     }
     _locW = (_tw('Ubicación', hStyle) + pad) * 2;
-    for (final rc in [_newCtrl, ...visible]) {
+    for (final rc in [_newCtrl, ..._rowControllers]) {
       _locW = max(_locW, (_tw(rc.location.text.isEmpty ? 'Dirección' : rc.location.text, dStyle) + pad) * 2);
     }
     double minName = _tw('Nombre', hStyle) + pad;
     double minLastName = _tw('Apellido', hStyle) + pad;
-    for (final rc in [_newCtrl, ...visible]) {
+    for (final rc in [_newCtrl, ..._rowControllers]) {
       minName = max(minName, _tw(rc.name.text.isEmpty ? 'Nombre' : rc.name.text, dStyle) + pad);
       minLastName = max(minLastName, _tw(rc.lastName.text.isEmpty ? 'Apellido' : rc.lastName.text, dStyle) + pad);
     }
@@ -132,7 +85,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
   void initState() {
     super.initState();
     AppData.instance.addListener(_onAppDataChanged);
-    _scrollCtrl.addListener(_onScroll);
     _load();
   }
 
@@ -152,32 +104,33 @@ class _ClientsScreenState extends State<ClientsScreen> {
       _syncControllers();
       _recalcWidths();
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _onScroll();
-      _recalcWidths();
-    });
   }
 
   void _syncControllers() {
-    for (int i = 0; i < _rowControllers.length; i++) {
-      _rowControllers[i]?.dispose();
-      _rowControllers[i] = null;
-    }
     while (_rowControllers.length < _clients.length) {
-      _rowControllers.add(null);
+      _rowControllers.add(_ClientRowControllers());
     }
     while (_rowControllers.length > _clients.length) {
-      _rowControllers.removeLast();
+      _rowControllers.removeLast().dispose();
     }
-    _onScroll();
+    for (int i = 0; i < _clients.length; i++) {
+      final rc = _rowControllers[i];
+      final c = _clients[i];
+      final phoneStr = c.phone;
+      if (rc.phone.text != phoneStr) rc.phone.text = phoneStr;
+      if (rc.name.text != c.name) rc.name.text = c.name;
+      if (rc.lastName.text != c.lastName) rc.lastName.text = c.lastName;
+      rc.birthDay = c.birthDay;
+      rc.birthMonth = c.birthMonth;
+      if (rc.location.text != c.location) rc.location.text = c.location;
+    }
   }
 
   @override
   void dispose() {
-    _scrollCtrl.dispose();
     AppData.instance.removeListener(_onAppDataChanged);
     _newCtrl.dispose();
-    for (final rc in _rowControllers) { rc?.dispose(); }
+    for (final rc in _rowControllers) { rc.dispose(); }
     super.dispose();
   }
 
@@ -225,7 +178,14 @@ class _ClientsScreenState extends State<ClientsScreen> {
   Future<void> _saveNew() async {
     final phone = _newCtrl.phone.text.trim();
     final name = _capitalize(_newCtrl.name.text.trim());
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ErrorHandler.showMessage('El nombre es obligatorio', isError: true);
+      return;
+    }
+    if (phone.isNotEmpty && !RegExp(r'^[\d\s\-()+]+$').hasMatch(phone)) {
+      ErrorHandler.showMessage('El teléfono solo debe contener números', isError: true);
+      return;
+    }
     final lastName = _capitalize(_newCtrl.lastName.text.trim());
     final client = Client(
       phone: phone,
@@ -247,14 +207,22 @@ class _ClientsScreenState extends State<ClientsScreen> {
     _newCtrl.location.clear();
     AppData.instance.notifyChanged();
     await _load();
+    ErrorHandler.showMessage('Cliente guardado');
   }
 
   Future<void> _saveRow(int index) async {
     if (index >= _rowControllers.length || index >= _clients.length) return;
-    final rc = _ensureController(index);
+    final rc = _rowControllers[index];
     final phone = rc.phone.text.trim();
     final name = _capitalize(rc.name.text.trim());
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ErrorHandler.showMessage('El nombre es obligatorio', isError: true);
+      return;
+    }
+    if (phone.isNotEmpty && !RegExp(r'^[\d\s\-()+]+$').hasMatch(phone)) {
+      ErrorHandler.showMessage('El teléfono solo debe contener números', isError: true);
+      return;
+    }
     final lastName = _capitalize(rc.lastName.text.trim());
     rc.name.text = name;
     rc.lastName.text = lastName;
@@ -295,6 +263,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
       await _db.deleteClient(_clients[index].id!);
       AppData.instance.notifyChanged();
       await _load();
+      ErrorHandler.showMessage('Eliminado correctamente');
     }
   }
 
@@ -411,7 +380,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     ),
                   )
                 : ListView.builder(
-                    controller: _scrollCtrl,
                     itemCount: _filteredClients.length,
                     itemExtent: 48,
                     itemBuilder: (context, i) {
@@ -421,7 +389,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       final birthdayToday = _isBirthdayToday(_clients[index]);
                       return _ClientRow(
                         key: ValueKey('cli_${_clients[index].id}'),
-                        controllers: _ensureController(index),
+                        controllers: _rowControllers[index],
                         even: isEven,
                         phoneW: _phoneW,
                         birthW: _birthW,
@@ -524,12 +492,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
       width: width,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: hasLeftBorder
-            ? BoxDecoration(
-                border: Border(
-                    left: BorderSide(color: theme.colorScheme.outlineVariant)),
-              )
-            : null,
         child: Text(text,
             style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -543,12 +505,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
       flex: flex,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: hasLeftBorder
-            ? BoxDecoration(
-                border: Border(
-                    left: BorderSide(color: theme.colorScheme.outlineVariant)),
-              )
-            : null,
         child: Text(text,
             style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -703,9 +659,6 @@ class _ClientRowState extends State<_ClientRow> {
       child: Container(
         width: 78,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(right: BorderSide(color: theme.dividerColor)),
-        ),
         child: Text(
           '${widget.appointmentCount}',
           style: TextStyle(
@@ -723,11 +676,7 @@ class _ClientRowState extends State<_ClientRow> {
       TextInputType? keyboard, {bool capitalize = false}) {
     return SizedBox(
       width: width,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(right: BorderSide(color: theme.dividerColor)),
-        ),
-        child: TextField(
+      child: TextField(
           controller: ctrl,
           focusNode: focus,
           decoration: const InputDecoration(
@@ -739,7 +688,6 @@ class _ClientRowState extends State<_ClientRow> {
           keyboardType: keyboard,
           textCapitalization: capitalize ? TextCapitalization.words : TextCapitalization.none,
         ),
-      ),
     );
   }
 
@@ -747,11 +695,7 @@ class _ClientRowState extends State<_ClientRow> {
       TextInputType? keyboard, {bool capitalize = false}) {
     return Expanded(
       flex: flex,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(right: BorderSide(color: theme.dividerColor)),
-        ),
-        child: TextField(
+      child: TextField(
           controller: ctrl,
           focusNode: focus,
           decoration: const InputDecoration(
@@ -763,7 +707,6 @@ class _ClientRowState extends State<_ClientRow> {
           keyboardType: keyboard,
           textCapitalization: capitalize ? TextCapitalization.words : TextCapitalization.none,
         ),
-      ),
     );
   }
 
@@ -780,7 +723,6 @@ class _ClientRowState extends State<_ClientRow> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             color: bg,
-            border: Border(right: BorderSide(color: theme.dividerColor)),
           ),
           child: Text(
             text.isEmpty ? 'DD/MM' : text,

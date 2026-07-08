@@ -9,6 +9,7 @@ import '../../models/client.dart';
 import '../../widgets/date_navigation_bar.dart';
 import '../../services/app_data.dart';
 import '../../services/time_config.dart';
+import '../../utils/error_handler.dart';
 import '../../utils/formatters.dart';
 import 'appointment_controllers.dart';
 import 'appointment_header.dart';
@@ -202,12 +203,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       await _loadWidthsFromPrefs();
       await _saveWidths();
     } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar datos: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) setState(() => _loading = false);
+      ErrorHandler.show(e);
     }
   }
 
@@ -402,11 +399,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       }
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e'), backgroundColor: Colors.red),
-        );
-      }
+      ErrorHandler.show(e);
     }
   }
 
@@ -427,12 +420,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       try {
         await _db.deleteAppointment(_appointments[index].id!);
         await _loadData();
+        ErrorHandler.showMessage('Eliminado correctamente');
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red),
-          );
-        }
+        ErrorHandler.show(e);
       }
     }
   }

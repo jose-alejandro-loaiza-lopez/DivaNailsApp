@@ -25,31 +25,31 @@ class AppointmentHeaderRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _hFixed('Hora', horaW, theme, false),
-          _div(0),
-          _hFixed('Cliente', clienteW, theme, false),
-          _div(1),
-          _hFixed('Teléfono', telW, theme, false),
-          _div(2),
-          _hFixed('Servicios', serviciosW, theme, false),
-          _div(3),
-          _hFixed('Manicurista', manW, theme, false),
-          _div(4),
-          _hFixed('Descripción', descW, theme, false),
-          _div(5),
-          _hFixed('Adicional', adicW, theme, false),
-          _div(6),
-          _hFixed('Pago', pagoW, theme, false),
-          _div(7),
-          _hFixed('Total', totalW, theme, false),
-          _div(8),
+          _hFixed('Hora', horaW, theme),
+          _div(0, theme),
+          _hFixed('Cliente', clienteW, theme),
+          _div(1, theme),
+          _hFixed('Teléfono', telW, theme),
+          _div(2, theme),
+          _hFixed('Servicios', serviciosW, theme),
+          _div(3, theme),
+          _hFixed('Manicurista', manW, theme),
+          _div(4, theme),
+          _hFixed('Descripción', descW, theme),
+          _div(5, theme),
+          _hFixed('Adicional', adicW, theme),
+          _div(6, theme),
+          _hFixed('Pago', pagoW, theme),
+          _div(7, theme),
+          _hFixed('Total', totalW, theme),
+          _div(8, theme),
           const SizedBox(width: 36),
         ],
       ),
     );
   }
 
-  Widget _div(int colIndex) {
+  Widget _div(int colIndex, ThemeData theme) {
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
       child: GestureDetector(
@@ -58,13 +58,15 @@ class AppointmentHeaderRow extends StatelessWidget {
         child: Container(
           width: dividerWidth,
           height: 48,
-          color: Colors.transparent,
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
+          ),
         ),
       ),
     );
   }
 
-  Widget _hFixed(String text, ValueNotifier<double> widthNotifier, ThemeData theme, bool hasLeftBorder) {
+  Widget _hFixed(String text, ValueNotifier<double> widthNotifier, ThemeData theme) {
     return ValueListenableBuilder<double>(
       valueListenable: widthNotifier,
       builder: (context, width, _) {
@@ -72,11 +74,6 @@ class AppointmentHeaderRow extends StatelessWidget {
           width: width,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: hasLeftBorder
-                ? BoxDecoration(
-                    border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
-                  )
-                : null,
             child: Text(text,
                 style: TextStyle(
                     fontWeight: FontWeight.bold, color: theme.colorScheme.onPrimaryContainer)),

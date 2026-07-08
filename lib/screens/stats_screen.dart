@@ -8,6 +8,7 @@ import '../models/service.dart';
 import '../models/client.dart';
 import '../services/app_data.dart';
 import '../services/time_config.dart';
+import '../utils/error_handler.dart';
 import '../services/theme_service.dart';
 import '../utils/formatters.dart';
 
@@ -619,8 +620,17 @@ class _StatsScreenState extends State<StatsScreen> {
     if (_appointments.isEmpty) return;
     final buf = StringBuffer('\uFEFF');
     buf.writeln(
-        'Fecha;Hora;Cliente;Teléfono;Servicios;Descripción;Manicurista;Adicional;Pago;Total');
-    for (final apt in _appointments) {
+        'Fecha;Hora;Cliente;Teléfono;Servicios;Manicurista;Descripción;Adicional;Pago;Total');
+    final sorted = List<Appointment>.from(_appointments)
+      ..sort((a, b) {
+        final dateCmp = a.date.compareTo(b.date);
+        if (dateCmp != 0) return dateCmp;
+        final aHas = a.time.isNotEmpty;
+        final bHas = b.time.isNotEmpty;
+        if (aHas != bHas) return aHas ? -1 : 1;
+        return a.time.compareTo(b.time);
+      });
+    for (final apt in sorted) {
       final servicesText = apt.serviceEntries
           .map((e) {
             final svc = _services.where((s) => s.id == e.serviceId).firstOrNull;
@@ -652,9 +662,9 @@ class _StatsScreenState extends State<StatsScreen> {
         }
       }
       final dateStr = DateFormat('d/M/yyyy', 'es').format(apt.date);
-      final timeStr = apt.time.isEmpty ? '--:--' : apt.time;
+      final timeStr = apt.time.isEmpty ? '' : apt.time;
       buf.writeln(
-          '$dateStr;$timeStr;${apt.clientName};$phone;"$servicesText";${apt.descripcion};$manicurist;\$${_fmt(apt.adicional)};$paymentText;\$${_fmt(total)}');
+          '$dateStr;$timeStr;${apt.clientName};$phone;"$servicesText";$manicurist;${apt.descripcion};\$${_fmt(apt.adicional)};$paymentText;\$${_fmt(total)}');
     }
     try {
       final dir = Directory(ThemeService.instance.effectiveExportPath);
@@ -663,28 +673,9 @@ class _StatsScreenState extends State<StatsScreen> {
       final ts = DateFormat('yyyyMMdd_HHmmss', 'es').format(now);
       final file = File('${dir.path}\\DivaNails_${DateFormat('yyyyMMdd', 'es').format(_from)}-${DateFormat('yyyyMMdd', 'es').format(_to)}_$ts.csv');
       await file.writeAsString(buf.toString());
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        final snackBar = SnackBar(
-          duration: const Duration(seconds: 5),
-          content: Text('Exportado a ${file.path}'),
-          action: SnackBarAction(
-            label: 'Abrir',
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              Process.start('cmd', ['/c', 'start', '', file.path]);
-            },
-          ),
-        );
-        final controller = ScaffoldMessenger.of(context).showSnackBar(snackBar);
-        Future.delayed(const Duration(seconds: 5)).then((_) => controller.close());
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e')),
-        );
-      }
+      ErrorHandler.showMessage('Exportado a ${file.path}');
+      } catch (e) {
+      ErrorHandler.show(e);
     }
   }
 

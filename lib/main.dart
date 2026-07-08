@@ -12,6 +12,7 @@ import 'screens/stats_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/app_data.dart';
 import 'services/theme_service.dart';
+import 'utils/error_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +58,7 @@ class _DivaNailsAppState extends State<DivaNailsApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      scaffoldMessengerKey: ErrorHandler.scaffoldMessengerKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: ThemeService.instance.seedColor,

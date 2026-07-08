@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/error_handler.dart';
 import '../../utils/formatters.dart';
 import 'appointment_controllers.dart';
 
@@ -108,15 +109,10 @@ class AppointmentRow extends StatelessWidget {
           onFocusChange: (f) {
             if (!f && !readOnly) {
               dc.descripcion = dc.descCtrl.text;
-              onSave().catchError((_) {});
+              onSave().catchError(ErrorHandler.show);
             }
           },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: theme.dividerColor)),
-            ),
-            child: TextField(
+          child: TextField(
               controller: dc.descCtrl,
               decoration: const InputDecoration(
                 isDense: true,
@@ -127,7 +123,6 @@ class AppointmentRow extends StatelessWidget {
               maxLines: 1,
               readOnly: readOnly,
             ),
-          ),
         ),
       ),
     );
@@ -141,17 +136,19 @@ class AppointmentRow extends StatelessWidget {
         child: Focus(
           onFocusChange: (f) {
             if (!f && !readOnly) {
-              final val = double.tryParse(dc.adicCtrl.text.replaceAll(',', '.')) ?? 0;
-              dc.adicional = val;
-              onSave().catchError((_) {});
+              final text = dc.adicCtrl.text.trim();
+              if (text.isNotEmpty) {
+                final val = double.tryParse(text.replaceAll(',', '.'));
+                if (val == null) {
+                  ErrorHandler.showMessage('El adicional debe ser un número válido', isError: true);
+                  return;
+                }
+                dc.adicional = val;
+              }
+              onSave().catchError(ErrorHandler.show);
             }
           },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: theme.dividerColor)),
-            ),
-            child: TextField(
+          child: TextField(
               controller: dc.adicCtrl,
               decoration: const InputDecoration(
                 isDense: true,
@@ -164,7 +161,6 @@ class AppointmentRow extends StatelessWidget {
               keyboardType: TextInputType.number,
               readOnly: readOnly,
             ),
-          ),
         ),
       ),
     );
@@ -180,9 +176,6 @@ class AppointmentRow extends StatelessWidget {
           child: Container(
             width: width,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: theme.dividerColor)),
-            ),
             child: Text(
               display.isEmpty ? '--:--' : display,
               textAlign: TextAlign.center,
@@ -211,9 +204,6 @@ class AppointmentRow extends StatelessWidget {
           child: Container(
             width: width,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: theme.dividerColor)),
-            ),
             child: Text(
               displayText,
               style: TextStyle(
@@ -241,7 +231,6 @@ class AppointmentRow extends StatelessWidget {
             width: width,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: theme.dividerColor)),
               color: hasError ? theme.colorScheme.error.withValues(alpha: 0.15) : null,
             ),
             child: Text(
@@ -269,9 +258,7 @@ class AppointmentRow extends StatelessWidget {
         return Container(
           width: width,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(right: BorderSide(color: theme.dividerColor)),
-          ),
+          decoration: const BoxDecoration(),
           child: Text(
             cp,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

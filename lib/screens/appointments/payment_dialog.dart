@@ -13,12 +13,14 @@ class PaymentDialog extends StatefulWidget {
 
 class _PaymentDialogState extends State<PaymentDialog> {
   late Map<String, TextEditingController> _controllers;
+  late Map<String, String?> _errorMessages;
   final _methods = PaymentEntry.allMethods;
 
   @override
   void initState() {
     super.initState();
     _controllers = {};
+    _errorMessages = {};
     for (final method in _methods) {
       final existing = widget.payments.cast<PaymentEntry?>().firstWhere(
         (p) => p?.method == method,
@@ -27,6 +29,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
       _controllers[method] = TextEditingController(
         text: existing != null ? formatPrice(existing.amount) : '',
       );
+      _errorMessages[method] = null;
     }
   }
 
@@ -49,7 +52,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
     final result = <PaymentEntry>[];
     for (final method in _methods) {
       final val = double.tryParse(_controllers[method]!.text.replaceAll(',', '.'));
-      if (val != null && val > 0) {
+      if (val != null && val != 0) {
         result.add(PaymentEntry(method: method, amount: val));
       }
     }
@@ -79,15 +82,26 @@ class _PaymentDialogState extends State<PaymentDialog> {
                     Expanded(
                       child: TextField(
                         controller: _controllers[_methods[i]],
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          border: OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          border: const OutlineInputBorder(),
                           hintText: '0',
+                          errorText: _errorMessages[_methods[i]],
+                          errorStyle: const TextStyle(fontSize: 11),
                         ),
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
                         style: const TextStyle(fontSize: 14),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (value) {
+                          setState(() {
+                            if (value.isNotEmpty) {
+                              final parsed = double.tryParse(value.replaceAll(',', '.'));
+                              _errorMessages[_methods[i]] = parsed == null ? 'Número inválido' : null;
+                            } else {
+                              _errorMessages[_methods[i]] = null;
+                            }
+                          });
+                        },
                       ),
                     ),
                   ],
@@ -112,7 +126,28 @@ class _PaymentDialogState extends State<PaymentDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _buildPayments()),
+          onPressed: () {
+            bool hasError = false;
+            for (final method in _methods) {
+              final text = _controllers[method]!.text.trim();
+              if (text.isNotEmpty) {
+                final parsed = double.tryParse(text.replaceAll(',', '.'));
+                if (parsed == null) {
+                  _errorMessages[method] = 'Número inválido';
+                  hasError = true;
+                } else {
+                  _errorMessages[method] = null;
+                }
+              } else {
+                _errorMessages[method] = null;
+              }
+            }
+            if (hasError) {
+              setState(() {});
+              return;
+            }
+            Navigator.pop(context, _buildPayments());
+          },
           child: const Text('Aceptar'),
         ),
       ],

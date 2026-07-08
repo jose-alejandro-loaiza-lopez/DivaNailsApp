@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/manicurist.dart';
 import '../services/app_data.dart';
+import '../utils/error_handler.dart';
 
 class ManicuristsScreen extends StatefulWidget {
   const ManicuristsScreen({super.key});
@@ -64,10 +65,22 @@ class _ManicuristsScreenState extends State<ManicuristsScreen> {
     if (index >= _controllers.length) return;
     final rc = _controllers[index];
     final name = rc.name.text.trim();
-    if (name.isEmpty) return;
-    final profit = double.tryParse(rc.profitText.replaceAll(',', '.')) ?? 40.0;
+    if (name.isEmpty) {
+      ErrorHandler.showMessage('El nombre de la manicurista es obligatorio', isError: true);
+      return;
+    }
+    final profitText = rc.profitText.trim();
+    final profit = profitText.isEmpty
+        ? 40.0
+        : double.tryParse(profitText.replaceAll(',', '.'));
 
-    if (index < _manicurists.length) {
+    if (profit == null) {
+      ErrorHandler.showMessage('La ganancia debe ser un número válido', isError: true);
+      return;
+    }
+
+    final isNew = index >= _manicurists.length;
+    if (!isNew) {
       await _db.updateManicurist(
         _manicurists[index].copyWith(name: name, profitPercentage: profit),
       );
@@ -76,6 +89,7 @@ class _ManicuristsScreenState extends State<ManicuristsScreen> {
     }
     AppData.instance.notifyChanged();
     await _load();
+    if (isNew) ErrorHandler.showMessage('Manicurista guardada');
   }
 
   Future<void> _delete(int index) async {
@@ -95,6 +109,7 @@ class _ManicuristsScreenState extends State<ManicuristsScreen> {
       await _db.deleteManicurist(_manicurists[index].id!);
     AppData.instance.notifyChanged();
       await _load();
+      ErrorHandler.showMessage('Eliminado correctamente');
     }
   }
 
@@ -118,8 +133,8 @@ class _ManicuristsScreenState extends State<ManicuristsScreen> {
             ),
             child: Row(
               children: [
-                _hCell('Nombre', 4, theme, false),
-                _hCell('Ganancia %', 1, theme, true),
+                _hCell('Nombre', 4, theme),
+                _hCell('Ganancia %', 1, theme),
                 const SizedBox(width: 6),
                 const SizedBox(width: 42),
               ],
@@ -147,16 +162,11 @@ class _ManicuristsScreenState extends State<ManicuristsScreen> {
     );
   }
 
-  Widget _hCell(String text, int flex, ThemeData theme, bool hasLeftBorder) {
+  Widget _hCell(String text, int flex, ThemeData theme) {
     return Expanded(
       flex: flex,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: hasLeftBorder
-            ? BoxDecoration(
-                border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
-              )
-            : null,
         child: Text(text,
             style: TextStyle(
                 fontWeight: FontWeight.bold,
@@ -255,11 +265,7 @@ class _ManicuristRowState extends State<_ManicuristRow> {
         children: [
           Expanded(
             flex: 4,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: theme.dividerColor)),
-              ),
-              child: TextField(
+            child: TextField(
                 controller: widget.controllers.name,
                 focusNode: widget.controllers.nameFocus,
                 decoration: const InputDecoration(
@@ -269,15 +275,10 @@ class _ManicuristRowState extends State<_ManicuristRow> {
                 ),
                 style: const TextStyle(fontSize: 14),
               ),
-            ),
           ),
           Expanded(
             flex: 1,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: theme.dividerColor)),
-              ),
-              child: TextField(
+            child: TextField(
                 controller: _profitCtrl,
                 focusNode: _profitFocus,
                 decoration: const InputDecoration(
@@ -290,7 +291,6 @@ class _ManicuristRowState extends State<_ManicuristRow> {
                 style: const TextStyle(fontSize: 14),
                 keyboardType: TextInputType.number,
               ),
-            ),
           ),
           const SizedBox(width: 6),
           Container(

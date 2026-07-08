@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/theme_service.dart';
 import '../services/app_data.dart';
 import '../database/database_helper.dart';
+import '../utils/error_handler.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -100,15 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _toggleDevMode() {
     AppData.instance.toggleDevMode();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppData.instance.devMode
-              ? 'Modo desarrollador activado'
-              : 'Modo desarrollador desactivado'),
-          backgroundColor: AppData.instance.devMode ? Colors.green : Colors.red,
-        ),
-      );
+    if (AppData.instance.devMode) {
+      ErrorHandler.showMessage('Modo desarrollador activado');
+    } else {
+      ErrorHandler.showMessage('Modo desarrollador desactivado', isError: true);
     }
   }
 
@@ -122,11 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _applyDbDir() async {
     final newDir = _dbDirCtrl.text.trim();
     if (newDir.isNotEmpty && !Directory(newDir).existsSync()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La ruta no existe')),
-        );
-      }
+      ErrorHandler.showMessage('La ruta no existe');
       return;
     }
     final isReset = newDir.isEmpty;

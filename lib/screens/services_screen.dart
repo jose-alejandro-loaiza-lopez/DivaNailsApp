@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../models/service.dart';
 import '../services/app_data.dart';
 import '../utils/formatters.dart';
+import '../utils/error_handler.dart';
 
 class ServicesScreen extends StatefulWidget {
   const ServicesScreen({super.key});
@@ -44,6 +45,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   Future<void> _loadServices() async {
     final services = await _db.getServices();
+    services.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     setState(() {
       _services = services;
       _loading = false;
@@ -72,23 +74,36 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   Future<void> _saveNew() async {
     final name = _newCtrl.name.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ErrorHandler.showMessage('El nombre del servicio es obligatorio', isError: true);
+      return;
+    }
     final price = double.tryParse(_newCtrl.price.text.replaceAll(',', '.'));
-    if (price == null || price <= 0) return;
+    if (price == null || price <= 0) {
+      ErrorHandler.showMessage('El precio debe ser un número válido mayor a 0', isError: true);
+      return;
+    }
     await _db.insertService(Service(name: name, price: price));
     _newCtrl.name.clear();
     _newCtrl.price.clear();
     AppData.instance.notifyChanged();
     await _loadServices();
+    ErrorHandler.showMessage('Servicio guardado');
   }
 
   Future<void> _saveRow(int index) async {
     if (index >= _rowControllers.length) return;
     final rc = _rowControllers[index];
     final name = rc.name.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ErrorHandler.showMessage('El nombre del servicio es obligatorio', isError: true);
+      return;
+    }
     final price = double.tryParse(rc.price.text.replaceAll(',', '.'));
-    if (price == null || price <= 0) return;
+    if (price == null || price <= 0) {
+      ErrorHandler.showMessage('El precio debe ser un número válido mayor a 0', isError: true);
+      return;
+    }
 
     await _db.updateService(_services[index].copyWith(name: name, price: price));
     AppData.instance.notifyChanged();
@@ -112,6 +127,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       await _db.deleteService(_services[index].id!);
       AppData.instance.notifyChanged();
       await _loadServices();
+      ErrorHandler.showMessage('Eliminado correctamente');
     }
   }
 

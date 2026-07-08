@@ -3,7 +3,8 @@ import '../../models/client.dart';
 
 class ClientSelectionDialog extends StatefulWidget {
   final List<Client> clients;
-  const ClientSelectionDialog({super.key, required this.clients});
+  final Map<int, int> appointmentCounts;
+  const ClientSelectionDialog({super.key, required this.clients, this.appointmentCounts = const {}});
 
   @override
   State<ClientSelectionDialog> createState() => _ClientSelectionDialogState();
@@ -36,7 +37,7 @@ class _ClientSelectionDialogState extends State<ClientSelectionDialog> {
     return AlertDialog(
       title: const Text('Seleccionar cliente'),
       content: SizedBox(
-        width: 350,
+        width: MediaQuery.of(context).size.width * 0.5,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -55,10 +56,15 @@ class _ClientSelectionDialogState extends State<ClientSelectionDialog> {
                 itemCount: _filtered.length,
                 itemBuilder: (context, index) {
                   final c = _filtered[index];
+                  final count = widget.appointmentCounts[c.id] ?? 0;
+                  final birth = c.birthDisplay;
+                  final subtitle = <String>[c.phone.isEmpty ? 'Sin teléfono' : c.phone];
+                  if (birth.isNotEmpty) subtitle.add('Cumple: $birth');
+                  subtitle.add('$count cita${count == 1 ? '' : 's'}');
                   return ListTile(
                     dense: true,
-                    title: Text('${c.name} ${c.lastName}'),
-                    subtitle: Text(c.phone),
+                    title: Text(c.fullName),
+                    subtitle: Text(subtitle.join(' • ')),
                     onTap: () => Navigator.pop(context, c),
                   );
                 },

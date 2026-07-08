@@ -6,7 +6,7 @@ import '../../utils/formatters.dart';
 
 class AptRowControllers {
   String clientName = '';
-  String clientPhone = '';
+  String? clientPhone;
   int? clientId;
   String time24 = '';
   List<ServiceEntry> selectedServiceEntries = [];

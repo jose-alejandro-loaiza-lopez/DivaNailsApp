@@ -16,6 +16,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<Service> _services = [];
   bool _loading = true;
   final List<_RowControllers> _rowControllers = [];
+  final _newCtrl = _RowControllers();
+  String _search = '';
+
+  List<Service> get _filteredServices {
+    if (_search.isEmpty) return _services;
+    final q = _search.toLowerCase();
+    return _services.where((s) => s.name.toLowerCase().contains(q)).toList();
+  }
 
   @override
   void initState() {
@@ -27,6 +35,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void dispose() {
     AppData.instance.removeListener(_onAppDataChanged);
+    _newCtrl.dispose();
     for (final rc in _rowControllers) { rc.dispose(); }
     super.dispose();
   }
@@ -43,11 +52,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   void _syncControllers() {
-    final needed = _services.length + 1;
-    while (_rowControllers.length < needed) {
+    while (_rowControllers.length < _services.length) {
       _rowControllers.add(_RowControllers());
     }
-    while (_rowControllers.length > needed) {
+    while (_rowControllers.length > _services.length) {
       _rowControllers.removeLast().dispose();
     }
     for (int i = 0; i < _services.length; i++) {
@@ -60,8 +68,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
         rc.price.text = priceTxt;
       }
     }
-    _rowControllers.last.name.text = '';
-    _rowControllers.last.price.text = '';
+  }
+
+  Future<void> _saveNew() async {
+    final name = _newCtrl.name.text.trim();
+    if (name.isEmpty) return;
+    final price = double.tryParse(_newCtrl.price.text.replaceAll(',', '.'));
+    if (price == null || price <= 0) return;
+    await _db.insertService(Service(name: name, price: price));
+    _newCtrl.name.clear();
+    _newCtrl.price.clear();
+    AppData.instance.notifyChanged();
+    await _loadServices();
   }
 
   Future<void> _saveRow(int index) async {
@@ -72,11 +90,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final price = double.tryParse(rc.price.text.replaceAll(',', '.'));
     if (price == null || price <= 0) return;
 
-    if (index < _services.length) {
-      await _db.updateService(_services[index].copyWith(name: name, price: price));
-    } else if (name.isNotEmpty) {
-      await _db.insertService(Service(name: name, price: price));
-    }
+    await _db.updateService(_services[index].copyWith(name: name, price: price));
     AppData.instance.notifyChanged();
     await _loadServices();
   }
@@ -96,7 +110,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
     if (confirm == true) {
       await _db.deleteService(_services[index].id!);
-    AppData.instance.notifyChanged();
+      AppData.instance.notifyChanged();
       await _loadServices();
     }
   }
@@ -106,6 +120,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Servicios'),
@@ -113,26 +128,108 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Buscar servicios...',
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+          ),
+          if (_search.isEmpty)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: TextField(
+                          controller: _newCtrl.name,
+                          focusNode: _newCtrl.nameFocus,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: 'Servicio',
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        child: TextField(
+                          controller: _newCtrl.price,
+                          focusNode: _newCtrl.priceFocus,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: 'Precio',
+                            prefixText: '\$ ',
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Center(
+                        child: IconButton(
+                          icon: const Icon(Icons.check_circle, color: Colors.green),
+                          onPressed: _saveNew,
+                        ),
+                      ),
+                    ),
+                  ],
+              ),
+            ),
+          if (_search.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Divider(height: 16, color: theme.dividerColor),
+            ),
+          if (_search.isNotEmpty) const SizedBox(height: 8),
           _HeaderRow(
             columns: const ['Servicio', 'Precio (\$)'],
             flexes: const [4, 1],
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _rowControllers.length,
-              itemExtent: 48,
-              itemBuilder: (context, index) {
-                final isNew = index == _services.length;
-                return _ServiceRow(
-                  key: ValueKey('svc_$index'),
-                  controllers: _rowControllers[index],
-                  isNewRow: isNew,
-                  even: index.isEven,
-                  onDelete: isNew ? null : () => _deleteService(index),
-                  onSave: () => _saveRow(index),
-                );
-              },
-            ),
+            child: _filteredServices.isEmpty
+                ? Center(
+                    child: Text(
+                      _search.isEmpty ? 'Sin servicios' : 'Sin resultados',
+                      style: TextStyle(color: theme.hintColor),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _filteredServices.length,
+                    itemExtent: 48,
+                    itemBuilder: (context, i) {
+                      final index = _services.indexOf(_filteredServices[i]);
+                      return _ServiceRow(
+                        key: ValueKey('svc_${_services[index].id}'),
+                        controllers: _rowControllers[index],
+                        even: index.isEven,
+                        onDelete: () => _deleteService(index),
+                        onSave: () => _saveRow(index),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -177,13 +274,6 @@ class _HeaderRow extends StatelessWidget {
               flex: flexes[i],
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: i > 0
-                    ? BoxDecoration(
-                        border: Border(
-                          left: BorderSide(color: theme.colorScheme.outlineVariant),
-                        ),
-                      )
-                    : null,
                 child: Text(
                   columns[i],
                   style: TextStyle(
@@ -203,7 +293,6 @@ class _HeaderRow extends StatelessWidget {
 
 class _ServiceRow extends StatefulWidget {
   final _RowControllers controllers;
-  final bool isNewRow;
   final bool even;
   final VoidCallback? onDelete;
   final Future<void> Function() onSave;
@@ -211,7 +300,6 @@ class _ServiceRow extends StatefulWidget {
   const _ServiceRow({
     super.key,
     required this.controllers,
-    required this.isNewRow,
     required this.even,
     this.onDelete,
     required this.onSave,
@@ -262,9 +350,7 @@ class _ServiceRowState extends State<_ServiceRow> {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: widget.isNewRow
-            ? theme.colorScheme.surfaceContainerLow
-            : (widget.even ? theme.colorScheme.surface : Colors.transparent),
+        color: widget.even ? theme.colorScheme.surface : Colors.transparent,
         border: Border(
           bottom: BorderSide(color: theme.dividerColor),
         ),
@@ -274,18 +360,14 @@ class _ServiceRowState extends State<_ServiceRow> {
           Expanded(
             flex: 4,
             child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.dividerColor),
-                ),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: TextField(
                 controller: widget.controllers.name,
                 focusNode: widget.controllers.nameFocus,
                 decoration: const InputDecoration(
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
                 ),
                 style: const TextStyle(fontSize: 14),
               ),
@@ -294,18 +376,14 @@ class _ServiceRowState extends State<_ServiceRow> {
           Expanded(
             flex: 1,
             child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(color: theme.dividerColor),
-                ),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: TextField(
                 controller: widget.controllers.price,
                 focusNode: widget.controllers.priceFocus,
                 decoration: const InputDecoration(
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
                 ),
                 style: const TextStyle(fontSize: 14),
                 keyboardType: TextInputType.number,

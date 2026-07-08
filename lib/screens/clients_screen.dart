@@ -36,12 +36,15 @@ class _ClientsScreenState extends State<ClientsScreen> {
   List<Client> _clients = [];
   Map<int, int> _appointmentCounts = {};
   bool _loading = true;
-  final _rowControllers = <_ClientRowControllers>[];
+  final _rowControllers = <_ClientRowControllers?>[];
   final _newCtrl = _ClientRowControllers();
   String _search = '';
   double _phoneW = 120;
   double _birthW = 100;
   double _locW = 150;
+  final ScrollController _scrollCtrl = ScrollController();
+  static const double _itemExtent = 48.0;
+  static const int _windowBuffer = 16;
 
   List<Client> get _filteredClients {
     if (_search.isEmpty) return _clients;
@@ -53,28 +56,73 @@ class _ClientsScreenState extends State<ClientsScreen> {
     ).toList();
   }
 
+  _ClientRowControllers _ensureController(int index) {
+    if (_rowControllers[index] == null) {
+      _rowControllers[index] = _ClientRowControllers();
+      _populateController(index);
+    }
+    return _rowControllers[index]!;
+  }
+
+  void _populateController(int index) {
+    final rc = _rowControllers[index]!;
+    final c = _clients[index];
+    final phoneStr = c.phone;
+    if (rc.phone.text != phoneStr) rc.phone.text = phoneStr;
+    if (rc.name.text != c.name) rc.name.text = c.name;
+    if (rc.lastName.text != c.lastName) rc.lastName.text = c.lastName;
+    rc.birthDay = c.birthDay;
+    rc.birthMonth = c.birthMonth;
+    if (rc.location.text != c.location) rc.location.text = c.location;
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients || _clients.isEmpty || _search.isNotEmpty) return;
+    final offset = _scrollCtrl.position.pixels;
+    final viewportH = _scrollCtrl.position.viewportDimension;
+    final firstVisible = (offset / _itemExtent).floor();
+    final visibleCount = (viewportH / _itemExtent).ceil() + 1;
+    final keepStart = max(0, firstVisible - _windowBuffer);
+    final keepEnd = min(_clients.length, firstVisible + visibleCount + _windowBuffer);
+
+    for (int i = 0; i < _rowControllers.length; i++) {
+      final rc = _rowControllers[i];
+      if (rc != null && (i < keepStart || i >= keepEnd)) {
+        rc.dispose();
+        _rowControllers[i] = null;
+      }
+    }
+    for (int i = keepStart; i < keepEnd; i++) {
+      if (_rowControllers[i] == null) {
+        _rowControllers[i] = _ClientRowControllers();
+        _populateController(i);
+      }
+    }
+  }
+
   void _recalcWidths() {
     const pad = 28.0;
     const hStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
     const dStyle = TextStyle(fontSize: 14);
     _phoneW = _tw('Teléfono', hStyle) + pad;
-    for (final rc in [_newCtrl, ..._rowControllers]) {
+    final visible = _rowControllers.where((rc) => rc != null).cast<_ClientRowControllers>().toList();
+    for (final rc in [_newCtrl, ...visible]) {
       _phoneW = max(_phoneW, _tw(rc.phone.text.isEmpty ? '300 000 0000' : rc.phone.text, dStyle) + pad);
     }
     _birthW = _tw('Cumpleaños', hStyle) + pad;
-    for (final rc in [_newCtrl, ..._rowControllers]) {
+    for (final rc in [_newCtrl, ...visible]) {
       final t = rc.birthDay != null && rc.birthMonth != null
           ? '${rc.birthDay} ${_months[(rc.birthMonth! - 1).clamp(0, 11)]}'
           : 'DD/MM';
       _birthW = max(_birthW, _tw(t, dStyle) + pad);
     }
     _locW = (_tw('Ubicación', hStyle) + pad) * 2;
-    for (final rc in [_newCtrl, ..._rowControllers]) {
+    for (final rc in [_newCtrl, ...visible]) {
       _locW = max(_locW, (_tw(rc.location.text.isEmpty ? 'Dirección' : rc.location.text, dStyle) + pad) * 2);
     }
     double minName = _tw('Nombre', hStyle) + pad;
     double minLastName = _tw('Apellido', hStyle) + pad;
-    for (final rc in [_newCtrl, ..._rowControllers]) {
+    for (final rc in [_newCtrl, ...visible]) {
       minName = max(minName, _tw(rc.name.text.isEmpty ? 'Nombre' : rc.name.text, dStyle) + pad);
       minLastName = max(minLastName, _tw(rc.lastName.text.isEmpty ? 'Apellido' : rc.lastName.text, dStyle) + pad);
     }
@@ -84,6 +132,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
   void initState() {
     super.initState();
     AppData.instance.addListener(_onAppDataChanged);
+    _scrollCtrl.addListener(_onScroll);
     _load();
   }
 
@@ -103,32 +152,32 @@ class _ClientsScreenState extends State<ClientsScreen> {
       _syncControllers();
       _recalcWidths();
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onScroll();
+      _recalcWidths();
+    });
   }
 
   void _syncControllers() {
+    for (int i = 0; i < _rowControllers.length; i++) {
+      _rowControllers[i]?.dispose();
+      _rowControllers[i] = null;
+    }
     while (_rowControllers.length < _clients.length) {
-      _rowControllers.add(_ClientRowControllers());
+      _rowControllers.add(null);
     }
     while (_rowControllers.length > _clients.length) {
-      _rowControllers.removeLast().dispose();
+      _rowControllers.removeLast();
     }
-    for (int i = 0; i < _clients.length; i++) {
-      final rc = _rowControllers[i];
-      final c = _clients[i];
-      if (rc.phone.text != c.phone) rc.phone.text = c.phone;
-      if (rc.name.text != c.name) rc.name.text = c.name;
-      if (rc.lastName.text != c.lastName) rc.lastName.text = c.lastName;
-      rc.birthDay = c.birthDay;
-      rc.birthMonth = c.birthMonth;
-      if (rc.location.text != c.location) rc.location.text = c.location;
-    }
+    _onScroll();
   }
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
     AppData.instance.removeListener(_onAppDataChanged);
     _newCtrl.dispose();
-    for (final rc in _rowControllers) { rc.dispose(); }
+    for (final rc in _rowControllers) { rc?.dispose(); }
     super.dispose();
   }
 
@@ -147,13 +196,13 @@ class _ClientsScreenState extends State<ClientsScreen> {
     final aNext = _nextBirthday(a, now);
     final bNext = _nextBirthday(b, now);
     if (aNext == null && bNext == null) {
-      return '${a.name} ${a.lastName}'.compareTo('${b.name} ${b.lastName}');
+      return a.fullName.compareTo(b.fullName);
     }
     if (aNext == null) return 1;
-    if (bNext == null) return 1;
+    if (bNext == null) return -1;
     final cmp = aNext.compareTo(bNext);
     if (cmp != 0) return cmp;
-    return '${a.name} ${a.lastName}'.compareTo('${b.name} ${b.lastName}');
+    return a.fullName.compareTo(b.fullName);
   }
 
   DateTime? _nextBirthday(Client client, DateTime from) {
@@ -175,8 +224,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
   Future<void> _saveNew() async {
     final phone = _newCtrl.phone.text.trim();
-    if (phone.isEmpty) return;
     final name = _capitalize(_newCtrl.name.text.trim());
+    if (name.isEmpty) return;
     final lastName = _capitalize(_newCtrl.lastName.text.trim());
     final client = Client(
       phone: phone,
@@ -201,11 +250,11 @@ class _ClientsScreenState extends State<ClientsScreen> {
   }
 
   Future<void> _saveRow(int index) async {
-    if (index >= _rowControllers.length) return;
-    final rc = _rowControllers[index];
+    if (index >= _rowControllers.length || index >= _clients.length) return;
+    final rc = _ensureController(index);
     final phone = rc.phone.text.trim();
-    if (phone.isEmpty) return;
     final name = _capitalize(rc.name.text.trim());
+    if (name.isEmpty) return;
     final lastName = _capitalize(rc.lastName.text.trim());
     rc.name.text = name;
     rc.lastName.text = lastName;
@@ -231,7 +280,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar cliente'),
         content:
-            Text('¿Eliminar a "${_clients[index].name} ${_clients[index].lastName}"?'),
+            Text('¿Eliminar a "${_clients[index].fullName}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -332,6 +381,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Divider(height: 16, color: theme.dividerColor),
             ),
+          if (_search.isNotEmpty) const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.primaryContainer,
@@ -361,6 +411,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                     ),
                   )
                 : ListView.builder(
+                    controller: _scrollCtrl,
                     itemCount: _filteredClients.length,
                     itemExtent: 48,
                     itemBuilder: (context, i) {
@@ -370,7 +421,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       final birthdayToday = _isBirthdayToday(_clients[index]);
                       return _ClientRow(
                         key: ValueKey('cli_${_clients[index].id}'),
-                        controllers: _rowControllers[index],
+                        controllers: _ensureController(index),
                         even: isEven,
                         phoneW: _phoneW,
                         birthW: _birthW,
@@ -791,7 +842,7 @@ class _ClientAppointmentsDialogState extends State<_ClientAppointmentsDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: Text('Citas de ${widget.client.name} ${widget.client.lastName}'),
+      title: Text('Citas de ${widget.client.fullName}'),
       content: SizedBox(
         width: 450,
         height: 400,

@@ -72,10 +72,10 @@ class AppointmentRow extends StatelessWidget {
           _fixedTapCell(controllers.servicesText, 'Toca para seleccionar...', serviciosW, theme,
               readOnly ? null : onTapServices, null),
           const SizedBox(width: appointmentDividerWidth),
-          _descCell(dc, descW, theme, readOnly),
-          const SizedBox(width: appointmentDividerWidth),
           _fixedTapCell(controllers.manicuristName, 'Toca para asignar...', manW, theme,
               readOnly ? null : onTapManicurist, null),
+          const SizedBox(width: appointmentDividerWidth),
+          _descCell(dc, descW, theme, readOnly),
           const SizedBox(width: appointmentDividerWidth),
           _adicCell(dc, adicW, theme, readOnly),
           const SizedBox(width: appointmentDividerWidth),
@@ -198,13 +198,14 @@ class AppointmentRow extends StatelessWidget {
     );
   }
 
-  Widget _fixedTapCell(String text, String hint, ValueNotifier<double> widthNotifier, ThemeData theme,
+  Widget _fixedTapCell(String? text, String hint, ValueNotifier<double> widthNotifier, ThemeData theme,
       VoidCallback? onTap, Color? textColor) {
     return ValueListenableBuilder<double>(
       valueListenable: widthNotifier,
       builder: (context, width, _) {
-        final displayText = text.isEmpty ? hint : text;
-        final isHint = text.isEmpty;
+        final t = text ?? '';
+        final displayText = t.isEmpty ? hint : t;
+        final isHint = t.isEmpty;
         return GestureDetector(
           onTap: onTap,
           child: Container(

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../services/time_config.dart';
 
 class ServiceEntry {
   final int serviceId;
@@ -179,7 +178,6 @@ class Appointment {
     final y = int.parse(parts[0]);
     final m = int.parse(parts[1]);
     final d = int.parse(parts[2]);
-    final utcMidnight = DateTime.utc(y, m, d);
-    return utcMidnight.add(Duration(hours: -TimeConfig.offsetHours()));
+    return DateTime(y, m, d);
   }
 }

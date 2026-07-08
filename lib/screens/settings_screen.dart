@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:restart_app/restart_app.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/theme_service.dart';
 import '../services/app_data.dart';
 import '../database/database_helper.dart';
@@ -18,6 +19,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _defaultDbDir = '';
+  String _appVersion = '';
   final _dbDirCtrl = TextEditingController();
   final _exportCtrl = TextEditingController();
   final _konamiBuffer = <LogicalKeyboardKey>[];
@@ -39,6 +41,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _loadSettings();
     _exportCtrl.text = ThemeService.instance.exportPath;
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() => _appVersion = '${info.version}+${info.buildNumber}');
+    }
   }
 
   @override
@@ -404,8 +414,8 @@ const SizedBox(height: 16),
                       const SizedBox(height: 12),
                       const _InfoRow(
                           label: 'Nombre', value: 'Diva Nails'),
-                      const _InfoRow(
-                          label: 'Versión', value: '1.0.0'),
+                      _InfoRow(
+                          label: 'Versión', value: _appVersion.isNotEmpty ? _appVersion : 'Cargando...'),
                       const _InfoRow(
                           label: 'Propósito',
                           value: 'Gestión de servicios para spa de uñas'),

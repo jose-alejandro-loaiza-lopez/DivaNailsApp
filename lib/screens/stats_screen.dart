@@ -22,7 +22,7 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   final _db = DatabaseHelper.instance;
-  DateTime _from = DateTime(TimeConfig.today().year, 1, 1);
+  DateTime _from = TimeConfig.today();
   DateTime _to = TimeConfig.today();
   List<Appointment> _appointments = [];
   List<Manicurist> _manicurists = [];
@@ -331,7 +331,13 @@ class _StatsScreenState extends State<StatsScreen> {
                   ],
                   selected: {_mode},
                   onSelectionChanged: (sel) {
-                    setState(() => _mode = sel.first);
+                    setState(() {
+                      _mode = sel.first;
+                      if (_mode == _DateMode.range) {
+                        _from = TimeConfig.today();
+                        _to = TimeConfig.today();
+                      }
+                    });
                     if (_mode == _DateMode.week) {
                       _initWeek();
                     }
@@ -430,7 +436,7 @@ class _StatsScreenState extends State<StatsScreen> {
                               children: [
                                 Expanded(flex: 2, child: Text('Manicurista',
                                     style: TextStyle(fontWeight: FontWeight.bold))),
-                                Expanded(flex: 1, child: Text('Servicios',
+                                Expanded(flex: 1, child: Text('Citas',
                                     style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
                                 Expanded(flex: 1, child: Text('Bruto',
                                     style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
@@ -444,7 +450,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           const SizedBox(height: 4),
                           // Per-manicurist rows
                           ...stats.values.map((s) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   border: Border(
                                       bottom: BorderSide(color: theme.dividerColor)),
@@ -500,6 +506,29 @@ class _StatsScreenState extends State<StatsScreen> {
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: theme.colorScheme.onPrimaryContainer)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Business profit
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Ganancia del negocio',
+                                    style: TextStyle(
+                                        fontSize: 16, fontWeight: FontWeight.bold,
+                                        color: Colors.green.shade800)),
+                                Text('\$${_fmt(totalGross - totalNet)}',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green.shade800)),
                               ],
                             ),
                           ),

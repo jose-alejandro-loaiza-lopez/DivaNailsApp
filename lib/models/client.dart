@@ -9,9 +9,9 @@ class Client {
 
   Client({
     this.id,
-    required this.phone,
+    this.phone = '',
     required this.name,
-    required this.lastName,
+    this.lastName = '',
     this.birthDay,
     this.birthMonth,
     this.location = '',
@@ -32,9 +32,9 @@ class Client {
   factory Client.fromMap(Map<String, dynamic> map) {
     return Client(
       id: map['id'] as int?,
-      phone: map['phone'] as String,
+      phone: (map['phone'] as String?) ?? '',
       name: map['name'] as String,
-      lastName: map['last_name'] as String,
+      lastName: map['last_name'] as String? ?? '',
       birthDay: map['birth_day'] as int?,
       birthMonth: map['birth_month'] as int?,
       location: map['location'] as String? ?? '',
@@ -60,6 +60,8 @@ class Client {
       location: location ?? this.location,
     );
   }
+
+  String get fullName => lastName.isNotEmpty ? '$name $lastName' : name;
 
   String get birthDisplay {
     if (birthDay == null || birthMonth == null) return '';

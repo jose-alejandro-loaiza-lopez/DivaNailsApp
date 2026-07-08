@@ -24,21 +24,28 @@ class _ManicuristSelectionDialogState extends State<ManicuristSelectionDialog> {
     return AlertDialog(
       title: const Text('Seleccionar manicurista'),
       content: SizedBox(
-        width: double.maxFinite,
-        child: RadioGroup<int>(
-          groupValue: _selected,
-          onChanged: (val) { setState(() => _selected = val); },
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: widget.manicurists.length,
-            itemBuilder: (context, index) {
-              final man = widget.manicurists[index];
-              return RadioListTile<int>(
-                title: Text(man.name),
-                value: man.id!,
-              );
-            },
-          ),
+        width: MediaQuery.of(context).size.width * 0.5,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: RadioGroup<int>(
+                groupValue: _selected,
+                onChanged: (val) { setState(() => _selected = val); },
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: widget.manicurists.length,
+                  itemBuilder: (context, index) {
+                    final man = widget.manicurists[index];
+                    return RadioListTile<int>(
+                      title: Text(man.name),
+                      value: man.id!,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       actions: [

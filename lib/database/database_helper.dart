@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import '../models/service.dart';
 import '../models/appointment.dart';
 import '../models/manicurist.dart';
@@ -42,10 +43,80 @@ class DatabaseHelper {
     _currentPath = path;
     return await openDatabase(
       path,
-      version: 1,
-      onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _onUpgradeDB,
+      onOpen: _onOpenDB,
     );
+  }
+
+  Future<void> _onOpenDB(Database db) async {
+    // FK intentionally left OFF — app handles referential integrity in code
+    await db.execute('PRAGMA foreign_keys = OFF');
+    await _repairClientsTable(db);
+    await _migrateClientsSchema(db);
+  }
+
+  Future<void> _repairClientsTable(Database db) async {
+    await db.execute('DROP TABLE IF EXISTS clients_old');
+    try {
+      await db.query('clients', limit: 1);
+    } catch (_) {
+      await db.execute('''
+        CREATE TABLE clients (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          phone TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          last_name TEXT DEFAULT '',
+          birth_day INTEGER,
+          birth_month INTEGER,
+          location TEXT DEFAULT ''
+        )
+      ''');
+    }
+  }
+
+  Future<void> _migrateClientsSchema(Database db) async {
+    List<Map<String, dynamic>> info;
+    try {
+      info = await db.rawQuery('PRAGMA table_info(clients)');
+    } catch (_) {
+      return;
+    }
+    final infoList = info.cast<Map<String, dynamic>>();
+    final phoneCol = infoList.firstWhere(
+      (c) => c['name'] == 'phone',
+      orElse: () => <String, dynamic>{'notnull': 0},
+    );
+    final hasLastName = infoList.any((c) => c['name'] == 'last_name');
+    if (phoneCol['notnull'] == 1 || !hasLastName) {
+      await db.execute('''
+        CREATE TABLE clients_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          phone TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL,
+          last_name TEXT DEFAULT '',
+          birth_day INTEGER,
+          birth_month INTEGER,
+          location TEXT DEFAULT ''
+        )
+      ''');
+      await db.execute('INSERT INTO clients_new SELECT * FROM clients');
+      if (!hasLastName) {
+        await db.execute('UPDATE clients_new SET last_name = \'\' WHERE last_name IS NULL');
+      }
+      await db.execute('UPDATE clients_new SET phone = \'\' WHERE phone IS NULL');
+      await db.execute('DROP TABLE clients');
+      await db.execute('ALTER TABLE clients_new RENAME TO clients');
+    }
+  }
+
+  Future<void> _onUpgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_appointments_client ON appointments(client_id)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_appointments_manicurist ON appointments(manicurist_id)');
+    }
   }
 
   /// Save a custom DB directory. Pass an empty string to reset to default.
@@ -86,10 +157,10 @@ class DatabaseHelper {
       CREATE TABLE appointments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_name TEXT DEFAULT '',
-        client_id INTEGER REFERENCES clients(id),
+        client_id INTEGER,
         client_phone TEXT DEFAULT '',
         service_ids TEXT NOT NULL,
-        manicurist_id INTEGER REFERENCES manicurists(id),
+        manicurist_id INTEGER,
         manicurist_name TEXT DEFAULT '',
         date TEXT NOT NULL,
         total_price REAL NOT NULL,
@@ -109,14 +180,17 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone TEXT UNIQUE NOT NULL,
+        phone TEXT NOT NULL DEFAULT '',
         name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
+        last_name TEXT DEFAULT '',
         birth_day INTEGER,
         birth_month INTEGER,
         location TEXT DEFAULT ''
       )
     ''');
+    await db.execute('CREATE INDEX idx_appointments_date ON appointments(date)');
+    await db.execute('CREATE INDEX idx_appointments_client ON appointments(client_id)');
+    await db.execute('CREATE INDEX idx_appointments_manicurist ON appointments(manicurist_id)');
   }
 
   Future<int> insertService(Service service) async {
@@ -126,31 +200,33 @@ class DatabaseHelper {
 
   Future<int> updateService(Service service) async {
     final db = await database;
-    final id = await db.update(
-      'services',
-      service.toMap(),
-      where: 'id = ?',
-      whereArgs: [service.id],
-    );
-    final rows = await db.query('appointments',
-        columns: ['id', 'service_ids']);
-    for (final row in rows) {
-      final raw = jsonDecode(row['service_ids'] as String) as List;
-      bool changed = false;
-      for (int i = 0; i < raw.length; i++) {
-        if (raw[i] is Map && raw[i]['service_id'] == service.id) {
-          raw[i]['name'] = service.name;
-          changed = true;
+    return await db.transaction((txn) async {
+      final id = await txn.update(
+        'services',
+        service.toMap(),
+        where: 'id = ?',
+        whereArgs: [service.id],
+      );
+      final rows = await txn.query('appointments',
+          columns: ['id', 'service_ids']);
+      for (final row in rows) {
+        final raw = jsonDecode(row['service_ids'] as String) as List;
+        bool changed = false;
+        for (int i = 0; i < raw.length; i++) {
+          if (raw[i] is Map && raw[i]['service_id'] == service.id) {
+            raw[i]['name'] = service.name;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await txn.update('appointments',
+              {'service_ids': jsonEncode(raw)},
+              where: 'id = ?',
+              whereArgs: [row['id']]);
         }
       }
-      if (changed) {
-        await db.update('appointments',
-            {'service_ids': jsonEncode(raw)},
-            where: 'id = ?',
-            whereArgs: [row['id']]);
-      }
-    }
-    return id;
+      return id;
+    });
   }
 
   Future<int> deleteService(int id) async {
@@ -219,39 +295,43 @@ class DatabaseHelper {
 
   Future<int> updateManicurist(Manicurist manicurist) async {
     final db = await database;
-    final id = await db.update(
-      'manicurists',
-      manicurist.toMap(),
-      where: 'id = ?',
-      whereArgs: [manicurist.id],
-    );
-    await db.update(
-      'appointments',
-      {'manicurist_name': manicurist.name},
-      where: 'manicurist_id = ?',
-      whereArgs: [manicurist.id],
-    );
-    return id;
+    return await db.transaction((txn) async {
+      final id = await txn.update(
+        'manicurists',
+        manicurist.toMap(),
+        where: 'id = ?',
+        whereArgs: [manicurist.id],
+      );
+      await txn.update(
+        'appointments',
+        {'manicurist_name': manicurist.name},
+        where: 'manicurist_id = ?',
+        whereArgs: [manicurist.id],
+      );
+      return id;
+    });
   }
 
   Future<int> deleteManicurist(int id) async {
     final db = await database;
-    final man = await db.query('manicurists', where: 'id = ?', whereArgs: [id]);
-    if (man.isNotEmpty) {
-      await db.update('appointments',
-          {
-            'manicurist_name': man.first['name'],
-            'manicurist_id': null,
-          },
-          where: 'manicurist_id = ?',
-          whereArgs: [id]);
-    } else {
-      await db.update('appointments',
-          {'manicurist_id': null},
-          where: 'manicurist_id = ?',
-          whereArgs: [id]);
-    }
-    return await db.delete('manicurists', where: 'id = ?', whereArgs: [id]);
+    return await db.transaction((txn) async {
+      final man = await txn.query('manicurists', where: 'id = ?', whereArgs: [id]);
+      if (man.isNotEmpty) {
+        await txn.update('appointments',
+            {
+              'manicurist_name': man.first['name'],
+              'manicurist_id': null,
+            },
+            where: 'manicurist_id = ?',
+            whereArgs: [id]);
+      } else {
+        await txn.update('appointments',
+            {'manicurist_id': null},
+            where: 'manicurist_id = ?',
+            whereArgs: [id]);
+      }
+      return await txn.delete('manicurists', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<List<Manicurist>> getManicurists() async {
@@ -262,59 +342,55 @@ class DatabaseHelper {
 
   Future<int> insertClient(Client client) async {
     final db = await database;
-    try {
-      return await db.insert('clients', client.toMap());
-    } catch (_) {
-      await db.update(
-        'clients',
-        client.toMap(),
-        where: 'phone = ?',
-        whereArgs: [client.phone],
-      );
-      final rows = await db.query('clients', where: 'phone = ?', whereArgs: [client.phone]);
-      return rows.first['id'] as int;
-    }
+    return await db.insert('clients', client.toMap());
   }
 
   Future<int> updateClient(Client client) async {
     final db = await database;
-    final id = await db.update(
-      'clients',
-      client.toMap(),
-      where: 'id = ?',
-      whereArgs: [client.id],
-    );
-    await db.update(
-      'appointments',
-      {
-        'client_name': '${client.name} ${client.lastName}',
-        'client_phone': client.phone,
-      },
-      where: 'client_id = ?',
-      whereArgs: [client.id],
-    );
-    return id;
+    return await db.transaction((txn) async {
+      final id = await txn.update(
+        'clients',
+        client.toMap(),
+        where: 'id = ?',
+        whereArgs: [client.id],
+      );
+      await txn.update(
+        'appointments',
+        {
+          'client_name': client.fullName,
+          'client_phone': client.phone,
+        },
+        where: 'client_id = ?',
+        whereArgs: [client.id],
+      );
+      return id;
+    });
   }
 
   Future<int> deleteClient(int id) async {
     final db = await database;
-    final client = await db.query('clients', where: 'id = ?', whereArgs: [id]);
-    if (client.isNotEmpty) {
-      await db.update('appointments',
-          {
-            'client_name': '${client.first['name']} ${client.first['last_name']}',
-            'client_phone': client.first['phone'],
-            'client_id': null,
-          },
-          where: 'client_id = ?',
-          whereArgs: [id]);
-    } else {
-      await db.update('appointments',
-          {'client_id': null},
-          where: 'client_id = ?',
-          whereArgs: [id]);
-    }
-    return await db.delete('clients', where: 'id = ?', whereArgs: [id]);
+    return await db.transaction((txn) async {
+      final client = await txn.query('clients', where: 'id = ?', whereArgs: [id]);
+      if (client.isNotEmpty) {
+        final cName = (client.first['name'] as String?) ?? '';
+        final cLastName = (client.first['last_name'] as String?) ?? '';
+        final cFullName = cLastName.isNotEmpty ? '$cName $cLastName' : cName;
+        await txn.update('appointments',
+            {
+              'client_name': cFullName,
+              'client_phone': client.first['phone'],
+              'client_id': null,
+            },
+            where: 'client_id = ?',
+            whereArgs: [id]);
+      } else {
+        await txn.update('appointments',
+            {'client_id': null},
+            where: 'client_id = ?',
+            whereArgs: [id]);
+      }
+      return await txn.delete('clients', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<List<Client>> getClients() async {
@@ -337,6 +413,18 @@ class DatabaseHelper {
       [clientId],
     );
     return result.first['cnt'] as int;
+  }
+
+  Future<Map<int, int>> getAppointmentCountsGroupedByClient() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT client_id, COUNT(*) as cnt FROM appointments WHERE client_id IS NOT NULL GROUP BY client_id',
+    );
+    final map = <int, int>{};
+    for (final row in result) {
+      map[row['client_id'] as int] = row['cnt'] as int;
+    }
+    return map;
   }
 
   Future<List<Appointment>> getAppointmentsByClient(int clientId) async {
@@ -384,8 +472,8 @@ class DatabaseHelper {
       if (await dbFile.exists()) {
         await dbFile.copy(backupPath);
       }
-    } catch (_) {
-      // Silently fail — backup is best-effort
+    } catch (e) {
+      debugPrint('Error en backupIfNewDay: $e');
     }
   }
 }

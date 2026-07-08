@@ -33,6 +33,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   List<Service> _services = [];
   List<Manicurist> _manicurists = [];
   List<Client> _clients = [];
+  Map<int, int> _appointmentCounts = {};
   final _rowControllers = <AptRowControllers>[];
   final _hScrollCtrl = ScrollController();
   final _hScrollBarCtrl = ScrollController();
@@ -142,12 +143,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     super.dispose();
   }
 
-  static const _columnMins = [87.0, 74.0, 105.0, 87.0, 106.0, 107.0, 90.0, 82.0, 76.0];
+  static const _columnMins = [87.0, 74.0, 105.0, 87.0, 107.0, 106.0, 90.0, 82.0, 76.0];
 
   void _onDividerDrag(int colIndex, double delta) {
     setState(() {
       final vals = [_horaW.value, _clienteW.value, _telW.value, _serviciosW.value,
-          _descW.value, _manW.value, _adicW.value, _pagoW.value, _totalW.value];
+          _manW.value, _descW.value, _adicW.value, _pagoW.value, _totalW.value];
 
       if (colIndex == 8) {
         vals[8] = max(_columnMins[8], vals[8] + delta);
@@ -168,7 +169,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       }
 
       _horaW.value = vals[0]; _clienteW.value = vals[1]; _telW.value = vals[2];
-      _serviciosW.value = vals[3]; _descW.value = vals[4]; _manW.value = vals[5];
+      _serviciosW.value = vals[3]; _manW.value = vals[4]; _descW.value = vals[5];
       _adicW.value = vals[6]; _pagoW.value = vals[7]; _totalW.value = vals[8];
     });
   }
@@ -187,11 +188,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       final services = await _db.getServices();
       final manicurists = await _db.getManicurists();
       final clients = await _db.getClients();
+      final counts = await _db.getAppointmentCountsGroupedByClient();
       setState(() {
         _appointments = appointments;
         _services = services;
         _manicurists = manicurists;
         _clients = clients;
+        _appointmentCounts = counts;
         _loading = false;
         _syncControllers();
         _recalcWidths();
@@ -227,7 +230,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             )
           : null;
       if (client != null) {
-        rc.clientName = '${client.name} ${client.lastName}';
+        rc.clientName = client.fullName;
         rc.clientPhone = client.phone;
       } else {
         rc.clientName = apt.clientName;
@@ -348,7 +351,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         final updated = _appointments[index].copyWith(
           clientName: rc.clientName.trim(),
           clientId: rc.clientId,
-          clientPhone: rc.clientPhone,
+          clientPhone: rc.clientPhone ?? '',
           serviceEntries: entries,
           manicuristId: rc.selectedManicuristId,
           manicuristName: rc.manicuristName,
@@ -364,7 +367,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         final id = await _db.insertAppointment(Appointment(
           clientName: rc.clientName.trim(),
           clientId: rc.clientId,
-          clientPhone: rc.clientPhone,
+          clientPhone: rc.clientPhone ?? '',
           serviceEntries: entries,
           manicuristId: rc.selectedManicuristId,
           manicuristName: rc.manicuristName,
@@ -379,7 +382,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           id: id,
           clientName: rc.clientName.trim(),
           clientId: rc.clientId,
-          clientPhone: rc.clientPhone,
+          clientPhone: rc.clientPhone ?? '',
           serviceEntries: entries,
           manicuristId: rc.selectedManicuristId,
           manicuristName: rc.manicuristName,
@@ -529,10 +532,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     final rc = _rowControllers[index];
     final result = await showDialog<Client>(
       context: context,
-      builder: (ctx) => ClientSelectionDialog(clients: _clients),
+      builder: (ctx) => ClientSelectionDialog(clients: _clients, appointmentCounts: _appointmentCounts),
     );
     if (result != null) {
-      rc.clientName = '${result.name} ${result.lastName}';
+      rc.clientName = result.fullName;
       rc.clientId = result.id;
       rc.clientPhone = result.phone;
       _saveRow(index);

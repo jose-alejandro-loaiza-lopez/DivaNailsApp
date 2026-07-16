@@ -250,7 +250,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       rc.adicional = apt.adicional;
       rc.descripcion = apt.descripcion;
       rc.descCtrl.text = apt.descripcion;
-      rc.adicCtrl.text = apt.adicional > 0 ? formatPrice(apt.adicional) : '';
+      rc.adicCtrl.text = apt.adicional != 0 ? formatPrice(apt.adicional) : '';
     }
     final last = _rowControllers.last;
     last.clientName = '';

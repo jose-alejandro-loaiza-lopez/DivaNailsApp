@@ -158,7 +158,7 @@ class AppointmentRow extends StatelessWidget {
                 prefixText: '\$ ',
               ),
               style: const TextStyle(fontSize: 14),
-              keyboardType: TextInputType.number,
+              keyboardType: TextInputType.numberWithOptions(signed: true, decimal: true),
               readOnly: readOnly,
             ),
         ),
@@ -238,7 +238,7 @@ class AppointmentRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 color: isHint
-                    ? theme.hintColor
+                    ? theme.colorScheme.error
                     : (hasError ? theme.colorScheme.error : null),
                 fontWeight: hasError ? FontWeight.w600 : null,
               ),
